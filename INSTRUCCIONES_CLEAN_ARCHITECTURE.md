@@ -17,6 +17,9 @@ La API será el único proyecto ejecutable, pero internamente se dividirá en:
 ```text
 Api/
   Domain/
+    Common/
+      Entity.cs
+      UsuarioId.cs
     Entities/
     ValueObjects/
     Enums/
@@ -87,8 +90,10 @@ La carpeta `Domain` contiene el modelo de negocio puro.
 
 Debe incluir:
 
+- Base común para entidades.
 - Entidades.
 - Objetos de valor generados con Vogen.
+- Identificadores tipados generados con Vogen, como `UsuarioId`.
 - Reglas de negocio.
 - Eventos de dominio.
 - Excepciones de dominio.
@@ -301,9 +306,13 @@ El dominio debe poder entenderse sin saber que existe HTTP, SQL Server, Entity F
 
 ### Usuario
 
-Se creó la entidad `Usuario` dentro de `Api/Domain/Entities` con los campos:
+Se creó una base común `Entity<TId>` dentro de `Api/Domain/Common` para declarar campos reutilizables de las entidades.
 
-- `Id`
+Se creó `UsuarioId` dentro de `Api/Domain/Common` como objeto de valor Vogen basado en `Guid`.
+
+Se creó la entidad `Usuario` dentro de `Api/Domain/Entities` heredando de `Entity<UsuarioId>` con los campos:
+
+- `Id`, heredado desde `Entity<UsuarioId>`
 - `Nombre`
 - `Apellido`
 - `Email`
@@ -311,3 +320,37 @@ Se creó la entidad `Usuario` dentro de `Api/Domain/Entities` con los campos:
 `Email` se modeló como objeto de valor en `Api/Domain/ValueObjects` usando la libreria Vogen. La entidad `Usuario` solo declara sus propiedades reutilizables y no contiene factories, validaciones manuales ni construccion manual de objetos de valor.
 
 Se agregó el paquete NuGet `Vogen` al proyecto `Api`. Los objetos de valor deben declararse con `[ValueObject<T>]` y deben crearse usando el metodo generado `From`.
+
+### Endpoint y seeds de usuarios
+
+Se agregó infraestructura de datos con `AppDbContext` en `Api/Infrastructure/Data`.
+
+La API consume la base `bd` definida en Aspire AppHost mediante `Aspire.Microsoft.EntityFrameworkCore.SqlServer`:
+
+```csharp
+builder.AddSqlServerDbContext<AppDbContext>("bd");
+```
+
+El AppHost mantiene la responsabilidad de crear y exponer SQL Server:
+
+```csharp
+var bd = builder
+    .AddSqlServer("bdserver")
+    .WithLifetime(ContainerLifetime.Persistent)
+    .AddDatabase("bd");
+
+builder.AddProject<Projects.Api>("Api")
+    .WithExternalHttpEndpoints()
+    .WithReference(bd)
+    .WaitFor(bd);
+```
+
+Se agregó `Bogus` para generar seeds de usuarios al iniciar la API. El seeder crea la base si no existe y solo inserta datos cuando la tabla `Usuarios` está vacía.
+
+Se creó el endpoint:
+
+```http
+GET /api/usuarios
+```
+
+El endpoint vive en `Api/Infrastructure/Api/Endpoints` y delega la lectura a la feature `Application/Features/Usuarios/Queries/ListarUsuarios`.
