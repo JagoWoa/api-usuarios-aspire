@@ -16,31 +16,19 @@ public sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
 
         builder
             .Property(usuario => usuario.Id)
-            .HasConversion(
-                usuarioId => usuarioId.Value,
-                value => UsuarioId.From(value))
+            .HasConversion(usuarioId => usuarioId.Value, value => UsuarioId.From(value))
             .ValueGeneratedNever();
 
-        builder
-            .Property(usuario => usuario.Nombre)
-            .HasMaxLength(100)
-            .IsRequired();
+        builder.Property(usuario => usuario.Nombre).HasMaxLength(100).IsRequired();
 
-        builder
-            .Property(usuario => usuario.Apellido)
-            .HasMaxLength(100)
-            .IsRequired();
+        builder.Property(usuario => usuario.Apellido).HasMaxLength(100).IsRequired();
 
         builder
             .Property(usuario => usuario.Email)
-            .HasConversion(
-                email => email.Value,
-                value => Email.From(value))
+            .HasConversion(email => email.Value, value => Email.From(value))
             .HasMaxLength(320)
             .IsRequired();
 
-        builder
-            .HasIndex(usuario => usuario.Email)
-            .IsUnique();
+        builder.HasIndex(usuario => usuario.Email).IsUnique();
     }
 }

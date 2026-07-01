@@ -24,7 +24,11 @@ public static class DatabaseSeeder
             .RuleFor(usuario => usuario.Apellido, faker => faker.Name.LastName())
             .RuleFor(
                 usuario => usuario.Email,
-                (faker, usuario) => Email.From(faker.Internet.Email(usuario.Nombre, usuario.Apellido).ToLowerInvariant()));
+                (faker, usuario) =>
+                    Email.From(
+                        faker.Internet.Email(usuario.Nombre, usuario.Apellido).ToLowerInvariant()
+                    )
+            );
 
         var usuarios = faker.Generate(25);
 

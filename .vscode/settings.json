@@ -1,0 +1,9 @@
+{
+  "dotnet.defaultSolution": "Api.sln",
+  "dotnet.testWindow.disableAutoDiscovery": false,
+  "dotnet.testWindow.disableBuildOnRefresh": false,
+  "dotnet.testWindow.disableBuildOnRun": false,
+  "dotnet.testWindow.discoveryTimeoutInSec": 900,
+  "dotnet.testWindow.skipTargetFrameworkCompatibilityCheck": true,
+  "java.test.config": []
+}

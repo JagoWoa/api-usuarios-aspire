@@ -54,6 +54,17 @@ Api/
     DependencyInjection.cs
 
   Program.cs
+
+Api.Tests/
+  Factories/
+  Features/
+    NombreFeature/
+      Commands/
+      Queries/
+  Infrastructure/
+
+Api.Tests.AppHost/
+  AppHost.cs
 ```
 
 ## Reglas de dependencia
@@ -72,6 +83,7 @@ Reglas:
 - `Controllers` reciben HTTP y delegan en handlers de `Application`.
 - `Program.cs` registra servicios y conecta la API con infraestructura.
 - Los controllers no deben contener lógica de negocio.
+- Los controllers deben enviar commands o queries usando `ISender` de MediatR.
 - La base de datos, HTTP externo, archivos, colas, correo y autenticación son detalles de infraestructura.
 - No usar comentarios en el código. El código debe ser claro por nombres, estructura y separación de responsabilidades.
 
@@ -131,6 +143,7 @@ Se usará CQRS basado en features y vertical slice:
 
 - Cada feature agrupa sus comandos y queries.
 - Cada comando/query tiene su propio handler.
+- Commands y queries deben implementarse con MediatR.
 - La validación vive en el mismo archivo del caso de uso.
 - Los DTOs, responses y mapeos viven en el mismo archivo de la feature que los necesita.
 - Cada caso de uso vertical slice debe quedar en un solo archivo: query/command, DTOs, mapeos, handler y validaciones.
@@ -365,3 +378,43 @@ El controller vive en `Api/Controllers/UsuariosController.cs` y delega la lectur
 La feature `ListarUsuarios` sigue vertical slice en un solo archivo: query, DTOs, response paginado, mapeo, validator y handler viven juntos en `ListarUsuarios.cs`.
 
 La feature usa `AppDbContext` directamente. No se utiliza `IApplicationDbContext`.
+
+### Pruebas funcionales
+
+Se creó `Api.Tests` como proyecto NUnit para pruebas funcionales a nivel de features.
+
+Se creó `Api.Tests.AppHost` como AppHost independiente para pruebas. Este AppHost solo levanta la base SQL Server `bd` y no usa lifetime persistente, para que la infraestructura de tests sea aislada del AppHost principal.
+
+Reglas de pruebas:
+
+- Las pruebas de features no deben llamar handlers directamente.
+- Las pruebas deben pasar por el pipeline de MediatR usando `ISender`.
+- Las pruebas HTTP deben usar `Microsoft.AspNetCore.Mvc.Testing`.
+- Las aserciones de pruebas deben usar Shouldly.
+- Los datos fake de tests deben crearse con Bogus dentro de factories aisladas.
+- El codigo de configuracion de tests debe estar separado de los tests reales.
+- Los tests de features deben separarse por `Commands` y `Queries`.
+- Las queries deben incluir tests de edge cases de paginacion y validacion.
+- La base de datos debe recrearse antes de cada test.
+- Respawn puede usarse para reiniciar datos despues de crear el esquema.
+- El AppHost principal `Api.AppHost` no debe usarse para pruebas funcionales.
+
+La suite actual valida:
+
+- `ListarUsuarios` desde MediatR devuelve resultado paginado.
+- `ListarUsuarios` desde MediatR valida paginacion.
+- Edge cases de pagina minima, pagina maxima, tamano minimo, tamano maximo, ultima pagina, pagina sin resultados y tamano maximo permitido.
+- `GET /api/usuarios` desde MVC testing devuelve respuesta paginada.
+- `GET /api/usuarios` desde MVC testing devuelve `400 BadRequest` cuando la paginacion es invalida.
+
+La configuracion de pruebas vive en `Api.Tests/Infrastructure`. Los datos fake de usuarios viven en `Api.Tests/Factories/UsuarioFactory.cs`.
+
+La salida de ejecucion de pruebas vive en `FunctionalTestBase` usando `TestContext.Out`, para no mezclar logs dentro de los tests reales. Desde VS Code se puede ejecutar la tarea `test: api detallado`, que corre:
+
+```powershell
+dotnet test Api.Tests/Api.Tests.csproj --logger "console;verbosity=detailed"
+```
+
+Si el panel de resultados de VS Code indica que la prueba no registro salida, eso solo significa que esa vista no capturo texto para el test seleccionado. La validacion real debe revisarse en la terminal o con la tarea detallada.
+
+Para ejecutar pruebas desde el panel de pruebas de VS Code, el workspace debe usar `Api.sln` como solucion por defecto. El archivo `Api.slnx` se conserva, pero C# Dev Kit puede verificar pruebas con mayor estabilidad usando el formato clasico `.sln`.

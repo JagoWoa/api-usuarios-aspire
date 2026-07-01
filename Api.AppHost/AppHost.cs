@@ -5,7 +5,6 @@ var bd = builder
     .WithLifetime(ContainerLifetime.Persistent)
     .AddDatabase("bd");
 
-builder.AddProject<Projects.Api>("Api")
-.WithExternalHttpEndpoints().WithReference(bd).WaitFor(bd);
+builder.AddProject<Projects.Api>("Api").WithExternalHttpEndpoints().WithReference(bd).WaitFor(bd);
 
 builder.Build().Run();
