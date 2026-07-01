@@ -1,10 +1,9 @@
-using Api.Application.Abstractions.Data;
 using Api.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Infrastructure.Data;
 
-public sealed class AppDbContext : DbContext, IApplicationDbContext
+public sealed class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)

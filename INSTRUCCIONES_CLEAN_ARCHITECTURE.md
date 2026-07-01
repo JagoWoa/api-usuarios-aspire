@@ -4,13 +4,13 @@ Este proyecto usará una sola API como proyecto principal, manteniendo Clean Arc
 
 ## Objetivo
 
-Organizar el código para que el dominio y los casos de uso no dependan de detalles externos como base de datos, HTTP, servicios externos, frameworks o controladores.
+Organizar el código para que el dominio no dependa de detalles externos como base de datos, HTTP, servicios externos, frameworks o controladores.
 
 La API será el único proyecto ejecutable, pero internamente se dividirá en:
 
 - `Domain`: reglas de negocio puras y objetos de valor generados con Vogen.
 - `Application`: casos de uso con CQRS, features y vertical slice.
-- `Infrastructure`: responsabilidades externas como Data, API, servicios externos, autenticación, persistencia y configuraciones técnicas.
+- `Infrastructure`: responsabilidades externas como Data, servicios externos, autenticación, persistencia y configuraciones técnicas.
 
 ## Estructura recomendada
 
@@ -27,26 +27,18 @@ Api/
     Exceptions/
 
   Application/
-    Abstractions/
-      Data/
-      Messaging/
-      Security/
-      Time/
     Behaviors/
     Common/
     Features/
       NombreFeature/
         Commands/
           CrearRecurso/
-            CrearRecursoCommand.cs
-            CrearRecursoHandler.cs
-            CrearRecursoValidator.cs
-            CrearRecursoResponse.cs
+            CrearRecurso.cs
         Queries/
           ObtenerRecurso/
-            ObtenerRecursoQuery.cs
-            ObtenerRecursoHandler.cs
-            ObtenerRecursoResponse.cs
+            ObtenerRecurso.cs
+
+  Controllers/
 
   Infrastructure/
     Data/
@@ -55,11 +47,8 @@ Api/
       Migrations/
       Repositories/
       UnitOfWork.cs
-    Api/
-      Endpoints/
-      Controllers/
-      Middleware/
-      Filters/
+    Middleware/
+    Filters/
     ExternalServices/
     Authentication/
     DependencyInjection.cs
@@ -69,20 +58,22 @@ Api/
 
 ## Reglas de dependencia
 
-El flujo de dependencias debe respetar este orden:
+El flujo interno del proyecto debe respetar este orden práctico:
 
 ```text
-Infrastructure -> Application -> Domain
+Controllers -> Application Features -> Infrastructure Data -> Domain
 ```
 
 Reglas:
 
 - `Domain` no depende de ninguna otra capa.
-- `Application` solo depende de `Domain` y de abstracciones propias.
-- `Infrastructure` implementa las abstracciones definidas en `Application`.
+- `Application` contiene las features y puede usar `AppDbContext` directamente.
+- `Infrastructure` contiene `AppDbContext`, configuraciones, seeds y servicios externos.
+- `Controllers` reciben HTTP y delegan en handlers de `Application`.
 - `Program.cs` registra servicios y conecta la API con infraestructura.
-- Los endpoints o controllers no deben contener lógica de negocio.
+- Los controllers no deben contener lógica de negocio.
 - La base de datos, HTTP externo, archivos, colas, correo y autenticación son detalles de infraestructura.
+- No usar comentarios en el código. El código debe ser claro por nombres, estructura y separación de responsabilidades.
 
 ## Domain
 
@@ -103,7 +94,7 @@ No debe incluir:
 
 - Entity Framework.
 - Atributos de base de datos.
-- Controllers o endpoints.
+- Controllers.
 - DTOs de entrada o salida HTTP.
 - Servicios externos.
 - Configuración de dependencias.
@@ -140,9 +131,12 @@ Se usará CQRS basado en features y vertical slice:
 
 - Cada feature agrupa sus comandos y queries.
 - Cada comando/query tiene su propio handler.
-- La validación vive cerca del caso de uso.
-- Los DTOs o responses viven dentro de la feature que los necesita.
-- La feature no debe depender de controllers, EF Core ni servicios externos concretos.
+- La validación vive en el mismo archivo del caso de uso.
+- Los DTOs, responses y mapeos viven en el mismo archivo de la feature que los necesita.
+- Cada caso de uso vertical slice debe quedar en un solo archivo: query/command, DTOs, mapeos, handler y validaciones.
+- Las queries de listado deben ser paginadas y validadas.
+- La feature no debe depender de controllers ni servicios externos concretos.
+- Las features pueden usar `AppDbContext` directamente para consultas y persistencia.
 
 Ejemplo de feature:
 
@@ -152,26 +146,27 @@ Application/
     Productos/
       Commands/
         CrearProducto/
-          CrearProductoCommand.cs
-          CrearProductoHandler.cs
-          CrearProductoValidator.cs
-          CrearProductoResponse.cs
+          CrearProducto.cs
       Queries/
         ObtenerProductoPorId/
-          ObtenerProductoPorIdQuery.cs
-          ObtenerProductoPorIdHandler.cs
-          ObtenerProductoPorIdResponse.cs
+          ObtenerProductoPorId.cs
 ```
 
-Los handlers deben trabajar contra abstracciones:
+Los handlers pueden trabajar directamente con `AppDbContext`:
 
 ```csharp
-namespace Api.Application.Abstractions.Data;
+using Api.Infrastructure.Data;
 
-public interface IApplicationDbContext
+namespace Api.Application.Features.Productos.Queries.ListarProductos;
+
+public sealed class ListarProductosHandler
 {
-    DbSet<Producto> Productos { get; }
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    private readonly AppDbContext _dbContext;
+
+    public ListarProductosHandler(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
 }
 ```
 
@@ -204,7 +199,7 @@ Convención de nombres:
 
 Cada caso de uso debe ser independiente y fácil de ubicar.
 
-En lugar de separar todo por tipo técnico como `Services`, `Dtos`, `Validators` y `Handlers`, se agrupa por funcionalidad:
+En lugar de separar todo por tipo técnico como `Services`, `Dtos`, `Validators` y `Handlers`, se agrupa por funcionalidad y cada caso de uso queda en un solo archivo:
 
 ```text
 Features/
@@ -228,7 +223,7 @@ La carpeta `Infrastructure` contiene los detalles externos.
 Debe incluir:
 
 - `Data`: EF Core, DbContext, configuraciones, migraciones, repositorios y Unit of Work.
-- `Api`: endpoints, controllers, middleware, filtros y detalles HTTP.
+- Middleware, filtros y detalles técnicos HTTP cuando sean responsabilidades transversales.
 - `ExternalServices`: clientes HTTP, correo, archivos, almacenamiento, pasarelas de pago.
 - `Authentication`: JWT, claims, usuarios autenticados, hashing.
 - `DependencyInjection.cs`: registro de servicios de infraestructura.
@@ -240,7 +235,7 @@ Ejemplo:
 ```csharp
 namespace Api.Infrastructure.Data;
 
-public sealed class AppDbContext : DbContext, IApplicationDbContext
+public sealed class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -261,6 +256,7 @@ Responsabilidades:
 - Validar datos de transporte cuando sea necesario.
 - Enviar comandos o queries a la capa `Application`.
 - Convertir resultados a respuestas HTTP.
+- Usar controllers como entrada HTTP del proyecto.
 
 No debe:
 
@@ -283,7 +279,7 @@ Registros de dependencias:
 
 ```csharp
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.AddInfrastructure();
 ```
 
 Los metodos `AddApplication` y `AddInfrastructure` deben agrupar registros por capa.
@@ -293,9 +289,9 @@ Los metodos `AddApplication` y `AddInfrastructure` deben agrupar registros por c
 1. Crear o actualizar entidades y objetos de valor en `Domain`.
 2. Crear el comando o query dentro de `Application/Features`.
 3. Crear validator, handler y response dentro de la misma feature.
-4. Definir abstracciones necesarias en `Application/Abstractions`.
+4. Usar `AppDbContext` directamente dentro del handler cuando el caso de uso necesite datos.
 5. Implementar detalles externos en `Infrastructure`.
-6. Exponer el caso de uso desde `Infrastructure/Api` mediante endpoint o controller.
+6. Exponer el caso de uso desde un controller.
 7. Registrar dependencias en `DependencyInjection.cs`.
 
 ## Regla principal
@@ -347,10 +343,25 @@ builder.AddProject<Projects.Api>("Api")
 
 Se agregó `Bogus` para generar seeds de usuarios al iniciar la API. El seeder crea la base si no existe y solo inserta datos cuando la tabla `Usuarios` está vacía.
 
-Se creó el endpoint:
+Se creó el endpoint mediante controller:
 
 ```http
 GET /api/usuarios
 ```
 
-El endpoint vive en `Api/Infrastructure/Api/Endpoints` y delega la lectura a la feature `Application/Features/Usuarios/Queries/ListarUsuarios`.
+El listado de usuarios es paginado y validado:
+
+```http
+GET /api/usuarios?pagina=1&tamanoPagina=10
+```
+
+Reglas de validación:
+
+- `pagina` debe ser mayor o igual a `1` y no mayor a `100000`.
+- `tamanoPagina` debe estar entre `1` y `100`.
+
+El controller vive en `Api/Controllers/UsuariosController.cs` y delega la lectura a la feature `Application/Features/Usuarios/Queries/ListarUsuarios`.
+
+La feature `ListarUsuarios` sigue vertical slice en un solo archivo: query, DTOs, response paginado, mapeo, validator y handler viven juntos en `ListarUsuarios.cs`.
+
+La feature usa `AppDbContext` directamente. No se utiliza `IApplicationDbContext`.
